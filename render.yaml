@@ -1,0 +1,23 @@
+# Blueprint: selecione o repositório no Render em New > Blueprint.
+services:
+  - type: web
+    name: iot-esp32-dashboard
+    runtime: python
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --config gunicorn.conf.py app:app
+    healthCheckPath: /api/health
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: WEB_CONCURRENCY
+        value: "1"
+      - key: GUNICORN_THREADS
+        value: "4"
+      - key: SENSOR_NAME
+        value: "ESP32 • Ambiente 01"
+      - key: SENSOR_TIMEZONE
+        value: America/Sao_Paulo
+      - key: STALE_AFTER_SECONDS
+        value: "180"

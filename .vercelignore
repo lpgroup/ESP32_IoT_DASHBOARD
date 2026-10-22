@@ -1,0 +1,9 @@
+.venv/
+esp32IoT/
+.env
+__pycache__/
+.pytest_cache/
+tests/
+docs/
+*.ipynb
+post_esp32_iot.py
