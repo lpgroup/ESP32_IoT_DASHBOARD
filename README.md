@@ -2,7 +2,7 @@
 
 Aplicação web completa, derivada do `post_esp32_iot.py`: backend Python/Flask (WSGI) e interface HTML/CSS/JavaScript, sem compilação de frontend ou CDN. Lê a **mesma planilha CSV publicada** do projeto original. Os arquivos originais foram preservados. O destino de produção é **Render.com**, com Gunicorn. A versão anterior usava FastAPI/ASGI e foi migrada para Flask; Uvicorn não é mais necessário.
 
-Versão inicial: **1.0.0**, registrada no arquivo `VERSION`. Consulte `CHANGELOG.md` para as mudanças. A versão em execução aparece em `/api/health`, no cabeçalho `X-App-Version` e no rodapé do painel. O Git mantém o histórico e a tag anotada `v1.0.0` identifica a entrega inicial.
+Versão atual: **1.0.1**, registrada no arquivo `VERSION`. Consulte `CHANGELOG.md` para as mudanças. A versão em execução aparece em `/api/health`, no cabeçalho `X-App-Version` e no rodapé do painel. O Git mantém o histórico e a tag anotada `v1.0.0` identifica a entrega inicial.
 
 Para publicar pela primeira vez, siga as seções **Git e GitHub pelo PowerShell** e **Deploy de produção no Render (WSGI)**. Os blocos de autenticação são interativos: execute uma etapa por vez e conclua o login no navegador antes de continuar.
 
@@ -366,7 +366,7 @@ Continue na seção **Deploy de produção no Render (WSGI)** logo abaixo. A tro
 
 ### 7. Publicar novas versões depois do primeiro deploy
 
-Para uma correção futura, edite o código e atualize `VERSION` para `1.0.1`, adicionando a mudança ao `CHANGELOG.md`. A tag `v1.0.1` do exemplo abaixo é para essa próxima versão, não para repetir o primeiro upload. Com o servidor local parado e as alterações revisadas:
+Para uma correção futura, edite o código e atualize `VERSION` para `1.0.2`, adicionando a mudança ao `CHANGELOG.md`. A tag `v1.0.2` do exemplo abaixo é para essa próxima versão, não para repetir uma versão já publicada. Com o servidor local parado e as alterações revisadas:
 
 ```powershell
 Set-Location -LiteralPath 'W:\ESP32_IoT\ESP32_IoT_DASHBOARD'
@@ -383,10 +383,10 @@ git status --short
 git diff
 git add --all
 git diff --cached --stat
-git commit -m 'fix: descrever a correção da versão 1.0.1'
-git tag -a v1.0.1 -m 'Correções da versão 1.0.1'
+git commit -m 'fix: descrever a correção da versão 1.0.2'
+git tag -a v1.0.2 -m 'Correções da versão 1.0.2'
 git push origin main
-git push origin v1.0.1
+git push origin v1.0.2
 ```
 
 Pare se algum comando falhar. Se o Render estiver com **Auto-Deploy: After CI Checks Pass** na branch `main`, o push aguarda os testes do GitHub Actions antes de iniciar um novo deploy. Com **On Commit**, o deploy inicia sem aguardar os testes. A tag é uma referência de versão; o serviço acompanha `main`, não a tag. Se o auto-deploy estiver desativado, use **Manual Deploy → Deploy latest commit** no Render.

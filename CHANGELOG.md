@@ -1,5 +1,10 @@
 # Histórico de versões
 
+## [1.0.1] - 2026-10-22
+
+- Substituição da ilustração estática do ESP32 pelo GIF animado fornecido.
+- Ajuste proporcional da animação ao cartão do dispositivo.
+
 ## [1.0.0] - 2026-10-22
 
 - Dashboard de temperatura e umidade integrado à planilha do ESP32.
