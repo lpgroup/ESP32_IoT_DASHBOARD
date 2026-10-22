@@ -6,6 +6,8 @@ Versão atual: **1.0.1**, registrada no arquivo `VERSION`. Consulte `CHANGELOG.m
 
 Para publicar pela primeira vez, siga as seções **Git e GitHub pelo PowerShell** e **Deploy de produção no Render (WSGI)**. Os blocos de autenticação são interativos: execute uma etapa por vez e conclua o login no navegador antes de continuar.
 
+Para conferir o projeto antes de publicar, siga [Testar o projeto localmente no PowerShell](#testar-o-projeto-localmente-no-powershell): testes automatizados, inicialização do servidor, consultas HTTP e verificação do GIF no navegador.
+
 ## Iniciar no PowerShell com um único bloco (Windows / VS Code)
 
 Requer **Python 3.12 ou superior** instalado e disponível pelo comando `python`, além de internet para baixar as dependências e consultar a planilha. No VS Code, abra **Terminal → Novo Terminal** e selecione **PowerShell**, ou use uma janela do PowerShell do Windows.
@@ -495,15 +497,114 @@ O `vercel.json` anterior foi atualizado para o preset Flask apenas para manter c
 
 Quando a fonte falha sem cache, retorna HTTP 502 com mensagem amigável. Com cache disponível, retorna a última consulta bem-sucedida com `source.status=source_error`; `fetched_at` não é atualizado artificialmente. Nenhum dado local é mantido entre reinícios. A planilha permanece a fonte do histórico.
 
-## Verificação
+## Testar o projeto localmente no PowerShell
+
+### 1. Preparar o ambiente e executar os testes automatizados
+
+Se ainda não criou `esp32IoT`, execute o bloco **Iniciar no PowerShell com um único bloco** do início deste README. Quando o servidor iniciar, pare-o com **Ctrl+C** para liberar o terminal. Depois, copie e execute todo o bloco abaixo:
 
 ```powershell
-.\esp32IoT\Scripts\python.exe -m pip install -r requirements-dev.txt
-.\esp32IoT\Scripts\python.exe -m pytest -q
-node --check static/app.js
+& {
+    $ErrorActionPreference = 'Stop'
+    Set-Location -LiteralPath 'W:\ESP32_IoT\ESP32_IoT_DASHBOARD'
+    $testPython = '.\esp32IoT\Scripts\python.exe'
+
+    if (-not (Test-Path -LiteralPath $testPython -PathType Leaf)) {
+        throw 'Crie o ambiente esp32IoT usando o bloco de inicialização do início deste README.'
+    }
+
+    & $testPython -m pip install -r requirements-dev.txt
+    if ($LASTEXITCODE -ne 0) { throw 'Falha ao instalar as dependências de teste.' }
+
+    & $testPython -m pytest -q
+    if ($LASTEXITCODE -ne 0) { throw 'Há testes com falha. Confira as mensagens acima antes de continuar.' }
+
+    if (Get-Command node -ErrorAction SilentlyContinue) {
+        node --check static/app.js
+        if ($LASTEXITCODE -ne 0) { throw 'Há um erro de sintaxe no JavaScript.' }
+    } else {
+        Write-Host 'Node não está instalado: verificação opcional de JavaScript ignorada.'
+    }
+
+    Write-Host 'Testes automatizados concluídos com sucesso.'
+}
 ```
 
-Os testes cobrem formato real da planilha, fuso, ordenação, decimais brasileiros, valores inválidos, leituras parciais, cache, falhas de rede, filtros, estados de atualidade e rotas HTTP. Também verificam o contrato WSGI, consultas concorrentes, proteção do cache, isolamento de filtros, respostas de erro sem traceback e parâmetros do Gunicorn. Node é necessário apenas para a verificação sintática opcional de JavaScript, não para executar ou publicar o aplicativo.
+A suíte atual contém **16 testes**; procure o resultado `16 passed`. Ela verifica CSV, fusos, ordenação, decimais brasileiros, valores inválidos, leituras parciais, cache, falhas da fonte, filtros, atualidade das leituras, rotas HTTP, contrato WSGI e concorrência. Esses testes simulam a fonte externa e não precisam de um servidor aberto ou de acesso à planilha para executar. A instalação das dependências precisa de internet. Node é opcional e só verifica a sintaxe do JavaScript.
+
+### 2. Subir o servidor no primeiro terminal
+
+Depois dos testes, execute este bloco em um terminal PowerShell e mantenha-o aberto:
+
+```powershell
+& {
+    $ErrorActionPreference = 'Stop'
+    Set-Location -LiteralPath 'W:\ESP32_IoT\ESP32_IoT_DASHBOARD'
+    .\esp32IoT\Scripts\python.exe -m flask --app app run --host 127.0.0.1 --port 8000 --no-debugger --no-reload
+}
+```
+
+Espere a mensagem `Running on http://127.0.0.1:8000`. Esse terminal ficará ocupado pelo servidor. Abra [o dashboard local](http://127.0.0.1:8000) no navegador. Para os próximos comandos, abra **um segundo terminal PowerShell** no VS Code; não feche o primeiro.
+
+### 3. Testar a página, a API e o arquivo GIF no segundo terminal
+
+Com o servidor em execução, copie e execute todo este bloco no segundo terminal:
+
+```powershell
+& {
+    $ErrorActionPreference = 'Stop'
+    Set-Location -LiteralPath 'W:\ESP32_IoT\ESP32_IoT_DASHBOARD'
+    $localBaseUrl = 'http://127.0.0.1:8000'
+    $expectedVersion = (Get-Content -LiteralPath VERSION -Raw).Trim()
+
+    Write-Host '1/4 - Conferindo página inicial...'
+    $pageResponse = Invoke-WebRequest -Uri "$localBaseUrl/" -UseBasicParsing -TimeoutSec 30
+    if ($pageResponse.StatusCode -ne 200) { throw 'A página inicial não retornou HTTP 200.' }
+
+    Write-Host '2/4 - Conferindo saúde e versão...'
+    $healthResponse = Invoke-RestMethod -Uri "$localBaseUrl/api/health" -TimeoutSec 30
+    $healthResponse | Format-List
+    if ($healthResponse.status -ne 'ok' -or $healthResponse.version -ne $expectedVersion) {
+        throw 'Confira a saúde da aplicação e reinicie o servidor para carregar a versão atual.'
+    }
+
+    Write-Host '3/4 - Conferindo o GIF do ESP32...'
+    $gifResponse = Invoke-WebRequest -Uri "$localBaseUrl/static/images/esp32-rings.gif" -Method Head -UseBasicParsing -TimeoutSec 30
+    if ($gifResponse.StatusCode -ne 200 -or $gifResponse.Headers['Content-Type'] -notmatch '^image/gif') {
+        throw 'O GIF não está sendo servido corretamente.'
+    }
+    Write-Host 'GIF disponível: HTTP 200, image/gif.'
+
+    Write-Host '4/4 - Consultando leituras reais da planilha...'
+    $readingsResponse = Invoke-RestMethod -Uri "$localBaseUrl/api/readings?period=1h" -TimeoutSec 30
+    $readingsResponse.source | Format-List
+    $readingsResponse.stats | ConvertTo-Json -Depth 4
+    Write-Host ('Registros no período: ' + $readingsResponse.total)
+
+    Write-Host 'Verificações HTTP concluídas. Confira também a interface no navegador.'
+}
+```
+
+O health check deve retornar `status: ok`, `service: iot-dashboard` e a mesma versão do arquivo `VERSION` (**1.0.1** nesta entrega). A verificação do GIF usa `HEAD`, para conferir sua disponibilidade sem baixar os aproximadamente 10 MB a cada teste.
+
+A consulta de leituras usa a **planilha real** e precisa de internet. O estado `online` indica uma leitura recente; `stale` significa que os registros estão antigos, e `source_error` indica falha na atualização com cache disponível. Esses estados não são, por si só, uma falha do servidor local. HTTP 502 nessa rota indica que não foi possível obter dados da fonte e não há cache disponível.
+
+### 4. Conferir a interface e encerrar
+
+No navegador, acesse <http://127.0.0.1:8000> e confira:
+
+- A marca **IoT**, os indicadores e o gráfico de temperatura/umidade.
+- Os filtros de período e os botões que mostram ou ocultam cada série.
+- O cartão **Dispositivo conectado**, à direita do gráfico no desktop, exibindo o ESP32 animado. O GIF também pode ser aberto diretamente em <http://127.0.0.1:8000/static/images/esp32-rings.gif>. Em telas menores, esse cartão é ocultado pelo layout responsivo.
+- O histórico, a busca, a paginação e a exportação CSV.
+- As preferências e a alternância de tema claro/escuro.
+- A versão atual no rodapé e o estado de atualização do sensor.
+
+Se estiver vendo a imagem antiga, pressione **Ctrl+F5**. A checagem HTTP confirma o arquivo; a reprodução da animação deve ser conferida visualmente no navegador. Para parar o servidor, volte ao primeiro terminal e pressione **Ctrl+C**. Nenhum desses comandos faz upload para GitHub ou deploy no Render.
+
+Se aparecer **conexão recusada**, confira se o primeiro terminal ainda mostra o servidor em execução e se você usou a mesma porta nas URLs. Se a porta 8000 estiver ocupada, pare a instância anterior no terminal correspondente ou escolha outra porta no comando de inicialização e em `$localBaseUrl`.
+
+### Verificar Gunicorn no Linux/WSL (opcional)
 
 No Linux/WSL, depois de instalar `requirements.txt`, valide também o carregamento do Gunicorn:
 
